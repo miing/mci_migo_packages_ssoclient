@@ -24,6 +24,7 @@ class V2ApiClient(object):
     @api_exception(errors.AlreadyRegistered)
     @api_exception(errors.CaptchaFailure)
     @api_exception(errors.CaptchaRequired)
+    @api_exception(errors.CaptchaError)
     @api_exception(errors.InvalidData)
     def register(self, data=None, **kwargs):
         return self.session.post('/accounts', data=self._merge(data, kwargs))

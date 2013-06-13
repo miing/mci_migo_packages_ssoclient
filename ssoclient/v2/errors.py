@@ -56,3 +56,8 @@ class ResourceNotFound(ApiException):
 # 409
 class AlreadyRegistered(ApiException):
     error_code = "ALREADY_REGISTERED"
+
+
+# 502
+class CaptchaError(ApiException):
+    error_code = "CAPTCHA_ERROR"

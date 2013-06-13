@@ -1,0 +1,4 @@
+To run tests, do
+
+python setup.py develop
+python setup.py test

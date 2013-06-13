@@ -6,7 +6,7 @@ from mock import (
 )
 
 from ssoclient.v2.client import api_exception
-from ssoclient.v2.http import ApiException, ApiSession, ServerError
+from ssoclient.v2.http import ApiSession, ClientError, ServerError
 from ssoclient.v2 import errors, V2ApiClient
 
 
@@ -14,13 +14,6 @@ REQUEST = 'ssoclient.v2.http.requests.Session.request'
 
 
 class ApiSessionTestCase(unittest.TestCase):
-
-    @patch(REQUEST)
-    def test_api_session_post_raises(self, mock_request):
-        mock_request.return_value = MagicMock(status_code=500)
-        api = ApiSession('http://foo.com')
-        with self.assertRaises(ServerError):
-            api.post('/foo', data=dict(x=1))
 
     @patch(REQUEST)
     def test_api_session_post(self, mock_request):
@@ -62,17 +55,36 @@ class ApiExceptionTestCase(unittest.TestCase):
     def do_test(self, response):
         return response
 
-    def test_api_exception_raises(self):
+    def test_error_code_raises_correct_exception(self):
         response = mock_response(400, code="SOME_CODE")
         with self.assertRaises(self.SomeException):
             self.do_test(response)
 
-    def test_api_exception_bad_error(self):
+    def test_400_no_json_content_raises_client_error(self):
         response = mock_response(400)
-        with self.assertRaises(errors.ApiException):
+        with self.assertRaises(ClientError) as e:
             self.do_test(response)
+            self.assertEqual(e.msg, "No error code in response")
 
-    def test_api_exception_returns(self):
+    def test_500_no_json_content_raises_server_error(self):
+        response = mock_response(500)
+        with self.assertRaises(ServerError) as e:
+            self.do_test(response)
+            self.assertEqual(e.msg, "No error code in response")
+
+    def test_400_unknown_code_raises_client_error(self):
+        response = mock_response(400, code="UNKNOWN_CODE")
+        with self.assertRaises(ClientError) as e:
+            self.do_test(response)
+            self.assertIn(e.msg, "UNKNOWN_CODE")
+
+    def test_500_unknown_code_raises_server_error(self):
+        response = mock_response(500, code="UNKNOWN_CODE")
+        with self.assertRaises(ServerError) as e:
+            self.do_test(response)
+            self.assertIn(e.msg, "UNKNOWN_CODE")
+
+    def test_success_returns(self):
         response = mock_response(200)
         result = self.do_test(response)
         self.assertEqual(result, response)
@@ -116,6 +128,11 @@ class RegisterV2ClientApiTestCase(V2ClientApiTestCase):
         with self.assertRaises(errors.CaptchaFailure):
             self.client.register(email='blah')
 
+    @patch(REQUEST, return_value=mock_response(502, code="CAPTCHA_ERROR"))
+    def test_register_captcha_error(self, mock_request):
+        with self.assertRaises(errors.CaptchaError):
+            self.client.register(email='blah')
+
     @patch(REQUEST, return_value=mock_response(409, code="ALREADY_REGISTERED"))
     def test_register_already_registered(self, mock_request):
         with self.assertRaises(errors.AlreadyRegistered):
@@ -127,11 +144,11 @@ class RegisterV2ClientApiTestCase(V2ClientApiTestCase):
         args = mock_request.call_args[0]
         self.assertEqual(args, ('POST', 'http://foo.com/accounts'))
 
+    def test_invalid_response_400(self):
+        self.assert_invalid_response(400, ClientError)
+
     def test_invalid_response_500(self):
         self.assert_invalid_response(500, ServerError)
-
-    def test_invalid_response_400(self):
-        self.assert_invalid_response(400, ApiException)
 
 
 class LoginV2ClientApiTestCase(V2ClientApiTestCase):
